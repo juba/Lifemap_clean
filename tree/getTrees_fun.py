@@ -1,8 +1,8 @@
-#!/usr/bin/python
+import logging
+from ete3 import Tree
+from config import TAXO_DIRECTORY
 
-# from ete3 import Tree
-# import os
-# import cPickle as pickle
+logger = logging.getLogger("LifemapBuilder")
 
 
 def getTheTrees():
@@ -13,9 +13,9 @@ def getTheTrees():
         def __init__(self):
             self.common_name_FR = []
 
-    print("Getting french translations...")
+    logger.info("Getting french translations...")
     TRANS = {}  ##translations in french
-    with open("taxo/TAXREFv11.txt") as f:
+    with open(TAXO_DIRECTORY / "TAXREFv11.txt") as f:
         for line in f:
             sciname = line.split("\t")[14]
             comnameFR = line.split("\t")[19]
@@ -25,9 +25,9 @@ def getTheTrees():
                 TRANS[sciname].common_name_FR.append(comnameFR)
 
     # get translation of ranks
-    print("\nGetting rank names in french...")
+    logger.info("\nGetting rank names in french...")
     RANKS = {}
-    with open("taxo/ranks.txt") as f:
+    with open(TAXO_DIRECTORY / "ranks.txt") as f:
         for line in f:
             rank_en = line.split("\t")[0]
             rank_fr = line.split("\t")[1].rstrip()  ##to remove \n
@@ -46,8 +46,8 @@ def getTheTrees():
     cpt = 0
     cptfr = 0
     ATTR = {}  ##here we will list attribute of each species per taxid
-    print("Reading NCBI taxonomy...")
-    with open("taxo/names.dmp") as f:
+    logger.info("Reading NCBI taxonomy...")
+    with open(TAXO_DIRECTORY / "names.dmp") as f:
         for line in f:
             taxid = line.split("|")[0].replace("\t", "")
             tid_val = line.split("|")[1].replace("\t", "")
@@ -80,11 +80,8 @@ def getTheTrees():
 
     T = {}
 
-    ###New gettrees
-    from ete3 import Tree
-
-    filepath = "taxo/nodes.dmp"
-    print("Building the NCBI taxonomy tree...")
+    filepath = TAXO_DIRECTORY / "nodes.dmp"
+    logger.info("Building the NCBI taxonomy tree...")
     with open(filepath) as fp:
         _ = fp.readline()  ## remove the 1 | 1 edge
         for line in fp:
@@ -122,16 +119,16 @@ def getTheTrees():
 
 
 # ##we save T entirely so that we do not hacve to write it to a file.
-# print("\n>>> Writing ARCHAEA tree...")
+# logger.info("\n>>> Writing ARCHAEA tree...")
 # with open('ARCHAEA.pkl', 'wb') as output:
 #     pickle.dump(T['2157'], output, pickle.HIGHEST_PROTOCOL)
-# print("\n>>> Writing BACTERIA tree...")
+# logger.info("\n>>> Writing BACTERIA tree...")
 # with open('BACTERIA.pkl', 'wb') as output:
 #     pickle.dump(T['2'], output, pickle.HIGHEST_PROTOCOL)
-# print("\n>>> Writing EUKA tree...")
+# logger.info("\n>>> Writing EUKA tree...")
 # with open('EUKARYOTES.pkl', 'wb') as output:
 #     pickle.dump(T['2759'], output, pickle.HIGHEST_PROTOCOL)
-# print(">>> DONE")
+# logger.info(">>> DONE")
 
 
 # #t = T['1']
@@ -139,13 +136,13 @@ def getTheTrees():
 # tbac = T['2']
 # teuc = T['2759']
 
-# print("\n>>> Writing ARCHAEA tree...")
+# logger.info("\n>>> Writing ARCHAEA tree...")
 # tarc.write(outfile = "ARCHAEA", features = ["name", "taxid", "sci_name","common_name","rank", "authority","synonym","common_name_FR", "rank_FR"], format_root_node=True)
-# print("\n>>> Writing BACTERIA tree...")
+# logger.info("\n>>> Writing BACTERIA tree...")
 # tbac.write(outfile = "BACTERIA", features = ["name", "taxid", "sci_name","common_name","rank", "authority","synonym","common_name_FR", "rank_FR"], format_root_node=True)
-# print("\n>>> Writing EUKA tree...")
+# logger.info("\n>>> Writing EUKA tree...")
 # teuc.write(outfile = "EUKARYOTES", features = ["name", "taxid", "sci_name","common_name","rank", "authority","synonym","common_name_FR", "rank_FR"], format_root_node=True)
-# print(">>> DONE")
+# logger.info(">>> DONE")
 
 
 # RANKS = {}

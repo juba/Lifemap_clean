@@ -1,10 +1,15 @@
 #!/usr/bin/python3
 
+import logging
 import json
+
+from config import BUILD_DIRECTORY
+
+logger = logging.getLogger("LifemapBuilder")
 
 
 def MergeJsons(f1, f2, output):
-    with open(f1, "r") as f:
+    with open(BUILD_DIRECTORY / f1, "r") as f:
         data1 = f.read()
     # Here we add a control for the unexpected problem of a "}," being present sometimes
     # at the end of the TreeFeatures2.json file.
@@ -13,7 +18,7 @@ def MergeJsons(f1, f2, output):
         lines.pop(-4)
         data1 = "\n".join(lines)
 
-    with open(f2, "r") as f:
+    with open(BUILD_DIRECTORY / f2, "r") as f:
         data2 = f.read()
 
     dict1 = json.loads(data1)
@@ -39,10 +44,11 @@ def MergeJsons(f1, f2, output):
             merged_dict = {**d1, **dict2_map[taxid]}
             result.append(merged_dict)
 
-    with open(output, "w") as f:
+    with open(BUILD_DIRECTORY / output, "w") as f:
         json.dump(result, f, indent=4)
 
 
-MergeJsons("TreeFeatures1.json", "ADDITIONAL.1.json", "TreeFeaturesComplete1.json")
-MergeJsons("TreeFeatures2.json", "ADDITIONAL.2.json", "TreeFeaturesComplete2.json")
-MergeJsons("TreeFeatures3.json", "ADDITIONAL.3.json", "TreeFeaturesComplete3.json")
+def merge_all():
+    MergeJsons("TreeFeatures1.json", "ADDITIONAL.1.json", "TreeFeaturesComplete1.json")
+    MergeJsons("TreeFeatures2.json", "ADDITIONAL.2.json", "TreeFeaturesComplete2.json")
+    MergeJsons("TreeFeatures3.json", "ADDITIONAL.3.json", "TreeFeaturesComplete3.json")

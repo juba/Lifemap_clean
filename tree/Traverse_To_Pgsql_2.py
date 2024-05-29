@@ -1,5 +1,3 @@
-#!/usr/bin/python
-
 # FEV, 5 2016
 # WE REMOVE THE WRITING TO JSON AND trees. This is performed by another code.
 # This code is more complete than the previous one.
@@ -7,55 +5,24 @@
 # We read the tree from external file (trees are retrieved with the code called "gettrees.py").
 # Added possibility to have groups containing only one descendants to be visible. Adds a few zoom levels (not so many)
 
-import sys
-import os
-from argparse import ArgumentParser  ##for options handling
-import numpy as np
-
 # new
+import logging
 import math
+import os
+from typing import Literal
+from pathlib import Path
 
-import psycopg2  ##for postgresql connection
+import numpy as np
+import psycopg  ##for postgresql connection
 
 # import cPickle as pickle
+from config import TAXO_DIRECTORY, PSYCOPG_CONNECT_URL, BUILD_DIRECTORY
 from getTrees_fun import getTheTrees
+from utils import download_file_if_newer
 
-parser = ArgumentParser(
-    description="Open taxonomic tree and recode it into PostGRES/PostGIS database for visualisation in Lifemap."
-)
-parser.add_argument(
-    "group",
-    help="Group to look at. Can be 1,2 or 3 for Archaea, Eukaryotes and Bacteria respectively",
-    choices=["1", "2", "3"],
-)
-parser.add_argument("start", help="index of the first node met in the tree", type=int)
-parser.add_argument(
-    "--lang",
-    nargs="?",
-    const="EN",
-    default="EN",
-    help="Language chosen. FR for french, EN (default) for english",
-    choices=["EN", "FR"],
-)
-parser.add_argument(
-    "--updatedb",
-    nargs="?",
-    const="True",
-    default="True",
-    help="Should the NCBI taxonomy db be updated ?",
-    choices=["True", "False"],
-)
-parser.add_argument(
-    "--simplify",
-    nargs="?",
-    const="True",
-    default="False",
-    help="Should the tree be simplified by removing environmental and unindentified species?",
-    choices=["True", "False"],
-)
-
-args = parser.parse_args()
 # print args
+
+logger = logging.getLogger("LifemapBuilder")
 
 
 def midpoint(x1, y1, x2, y2):
@@ -77,14 +44,23 @@ def midpoint(x1, y1, x2, y2):
 
 ##update db (if requested?)
 def updateDB():
-    print("Updating databases...")
-    os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz -N")
-    os.system("tar xvzf taxdump.tar.gz -C taxo/")
+    logger.info("Updating databases...")
+    downloaded = download_file_if_newer(
+        host="ftp.ncbi.nlm.nih.gov",
+        remote_file="/pub/taxonomy/taxdump.tar.gz",
+        local_file=TAXO_DIRECTORY / "taxdump.tar.gz",
+    )
+    # os.system("wget ftp://ftp.ncbi.nlm.nih.gov/pub/taxonomy/taxdump.tar.gz -N")
+    if downloaded:
+        os.system(f"tar xvzf {TAXO_DIRECTORY / 'taxdump.tar.gz'} -C {TAXO_DIRECTORY}")
     # unzip taxref
-    os.system("unzip -o taxo/TAXREF_INPN_v11.zip -d taxo/")
+    if not Path(TAXO_DIRECTORY / "TAXREFv11.txt").exists():
+        os.system(
+            f"unzip -o {TAXO_DIRECTORY / 'TAXREF_INPN_v11.zip'} -d {TAXO_DIRECTORY}"
+        )
 
 
-def simplify(arbre):
+def simplify_tree(arbre):
     initialSize = len(arbre)
     for n in arbre.traverse():
         if n.is_leaf() and (n.rank == "no rank"):
@@ -101,86 +77,17 @@ def simplify(arbre):
                 or ("sp." in n.sci_name)
             ):
                 n.detach()
-    print("Tree HAS BEEN simplified")
+    logger.info("Tree HAS BEEN simplified")
     finalSize = len(arbre)
     diffInSize = initialSize - finalSize
-    print(
+    logger.info(
         str(diffInSize)
         + " tips have been removed ("
         + str(round(float(diffInSize) / float(initialSize) * 100, 2))
         + "%)"
     )
-    print("FINAL TREE SIZE: " + str(finalSize))
+    logger.info("FINAL TREE SIZE: " + str(finalSize))
     return arbre
-
-
-if args.updatedb == "True":
-    updateDB()
-
-##get arguments
-groupnb = args.group  ##will be written
-
-T = getTheTrees()
-
-##let's try to write the tree entirely here, in a file
-
-# print sys.argv[1];
-starti = args.start
-print("Downloading tree...")
-if groupnb == "1":
-    # with open('ARCHAEA.pkl', 'rb') as input:
-    # t = pickle.load(input)
-    t = T["2157"].detach()
-    # SIMPLIFY THE TREE IF REQUESTED
-    if args.simplify == "True":
-        t = simplify(t)
-    # t = Tree("ARCHAEA")
-    print("Archaeal tree loaded...")
-    ##and we save it
-    t.write(outfile="ARCHAEA", features=["name", "taxid"], format_root_node=True)
-    t.x = 6.0
-    t.y = 9.660254 - 10.0
-    t.alpha = 30.0
-    t.ray = 10.0
-    starti = starti
-if groupnb == "2":
-    # with open('EUKARYOTES.pkl', 'rb') as input:
-    # 	t = pickle.load(input)
-    t = T["2759"].detach()
-    # SIMPLIFY THE TREE IF REQUESTED
-    if args.simplify == "True":
-        t = simplify(t)
-    print("Eukaryotic tree loaded")
-    t.write(outfile="EUKARYOTES", features=["name", "taxid"], format_root_node=True)
-    t.x = -6.0
-    t.y = 9.660254 - 10.0
-    t.alpha = 150.0
-    t.ray = 10.0
-    starti = starti
-if groupnb == "3":
-    # with open('BACTERIA.pkl', 'rb') as input:
-    # 	t = pickle.load(input)
-    t = T["2"].detach()
-    # SIMPLIFY THE TREE IF REQUESTED
-    if args.simplify == "True":
-        t = simplify(t)
-    print("Bacterial tree loaded")
-    t.write(outfile="BACTERIA", features=["name", "taxid"], format_root_node=True)
-    t.x = 0.0
-    t.y = -11.0
-    t.alpha = 270.0
-    t.ray = 10.0
-    starti = starti
-
-t.zoomview = np.ceil(np.log2(30 / t.ray))
-
-
-# specis and node ids
-nbsp = len(t)
-spid = starti
-ndid = starti + nbsp
-rootnb = ndid + 1
-maxZoomView = 0
 
 
 ##FUNCTIONS
@@ -217,49 +124,7 @@ def HalfCircPlusEllips(x, y, r, alpha, start, end, nsteps):
     return (np.concatenate((circ[0], elli[0])), np.concatenate((circ[1], elli[1])))
 
 
-##CONNECT TO POSTGRESQL/POSTGIS DATABASE
-try:
-    conn = psycopg2.connect(
-        "dbname='tree' user='lm' host='localhost'"
-    )  # password will be directly retrieved from ~/.pgpassconn
-except Exception:
-    print("I am unable to connect to the database")
-    sys.exit(1)
-
-cur = conn.cursor()
-##INITIALIZE DATABASE
-if groupnb == "1":
-    ##we delete current tables
-    cur.execute(
-        "select exists(select * from information_schema.tables where table_name='points')"
-    )
-    res = cur.fetchone()
-    if res is not None and len(res) > 0:  ## we drop tables only if they exist.
-        print("REMOVING OLD TABLES")
-        cur.execute("DROP TABLE points;")
-        cur.execute("DROP TABLE lines;")
-        cur.execute("DROP TABLE polygons;")
-        conn.commit()
-    ##we create the database structure here
-    cur.execute(
-        "CREATE TABLE points(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POINT,900913));"
-    )
-    cur.execute(
-        "CREATE TABLE lines(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankname boolean,sci_name text,common_name text,full_name text,rank text,name text, nbdesc integer,taxid text,way geometry(LINESTRING,900913));"
-    )
-    cur.execute(
-        "CREATE TABLE polygons(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POLYGON,900913));"
-    )
-    conn.commit()
-    print("\nTABLES HAVE BEEN CREATED. Done.\n")
-    ##we include the root node
-    cur.execute(
-        "INSERT INTO points (id, sci_name, common_name,rank,nbdesc,tip, zoomview,taxid,way) VALUES(1000000000, 'Root','Root','Root',1000000, FALSE, 1,1,ST_Transform(ST_GeomFromText('POINT(0 -4.226497)', 4326), 900913));"
-    )
-    conn.commit()
-
-
-def writeosmNode(node):
+def writeosmNode(node, cur):
     ##we write INFO FOR EACH NODE. Clades will be delt with later on. We put less info than for the json file
     command = (
         "INSERT INTO points (id, taxid, sci_name, common_name,rank,nbdesc,zoomview, tip,way) VALUES(%d,%s,'%s','%s','%s',%d,%d,'%s',ST_Transform(ST_GeomFromText('POINT(%.20f %.20f)', 4326), 900913));"
@@ -281,7 +146,7 @@ def writeosmNode(node):
     ##write json for search
 
 
-def writeosmWays(node, id):
+def writeosmWays(node, id, cur, groupnb):
     # Create branch names
     Upsci_name = node.up.sci_name
     Upcommon_name = node.up.common_name
@@ -316,7 +181,7 @@ def writeosmWays(node, id):
     ##conn.commit();
 
 
-def writeosmpolyg(node, ids):
+def writeosmpolyg(node, ids, cur, groupnb):
     polyg = HalfCircPlusEllips(
         node.x,
         node.y,
@@ -387,94 +252,7 @@ def writeosmpolyg(node, ids):
     ##conn.commit();
 
 
-print("Tree traversal...")
-for n in t.traverse():
-    special = 0
-    n.dist = 1.0
-    tot = 0.0
-    if n.is_leaf():
-        spid = spid + 1
-        n.id = spid
-    else:
-        ndid = ndid + 1
-        n.id = ndid
-    child = n.children
-    ##NEW  -->|
-    if (len(child) == 1) & (len(n) > 1):
-        special = 1
-    if (len(child) == 1) & (len(n) == 1):
-        special = 2
-    ## |<-- NEW
-    for i in child:
-        tot = tot + np.sqrt(len(i))
-    nbdesc = len(n)
-    ##remove special chars in names
-    ####IF --LANG IS SET TO FR, WE CHGANGE HERE THE RANK AND COMMON NAMES
-    if args.lang == "FR":
-        n.common_name = n.common_name_FR
-        n.rank = n.rank_FR
-    #####OK
-    n.common_name_long = ", ".join(n.common_name)
-    n.common_name = n.common_name[0] if len(n.common_name) > 0 else ""
-    ##we create a 'long' common name. the common name going to db is only the first of the list
-    n.common_name = n.common_name.replace("'", "''")
-    n.rank = n.rank.replace("'", "''")
-    n.sci_name = n.sci_name.replace("'", "''")
-    # add parenthesis to the common name
-    if n.common_name != "":
-        n.common_name = "(" + n.common_name + ")"
-    if n.common_name_long != "":
-        n.common_name_long = "(" + n.common_name_long + ")"
-    n.nbdesc = nbdesc
-    nbsons = len(child)
-    angles = []
-    ray = n.ray
-    for i in child:
-        # i.ang = 180*(len(i)/float(nbdesc))/2;
-        i.ang = 180 * (np.sqrt(len(i)) / tot) / 2
-        # using sqrt we decrease difference between large and small groups
-        angles.append(i.ang)
-        if special == 1:
-            i.ray = ray - (ray * 20) / 100
-        else:
-            if special == 2:
-                i.ray = ray - (ray * 50) / 100
-            else:
-                i.ray = (ray * np.sin(rad(i.ang)) / np.cos(rad(i.ang))) / (
-                    1 + (np.sin(rad(i.ang)) / np.cos(rad(i.ang)))
-                )
-        i.dist = ray - i.ray
-    ang = np.repeat(angles, 2)
-    ang = np.cumsum(ang)
-    ang = ang[0::2]
-    ang = [i - (90 - n.alpha) for i in ang]
-    cpt = 0
-    for i in child:
-        i.alpha = ang[cpt]
-        i.x = n.x + i.dist * np.cos(rad(i.alpha))
-        i.y = n.y + i.dist * np.sin(rad(i.alpha))
-        i.zoomview = np.ceil(np.log2(30 / i.ray))
-        if i.zoomview <= 0:
-            i.zoomview = 0
-        if maxZoomView < i.zoomview:
-            maxZoomView = i.zoomview
-        cpt = cpt + 1
-    # we write node info
-    writeosmNode(n)
-
-print("Tree traversal... DONE (first one)")
-conn.commit()
-
-
-#################################
-#       WRITE JSON FILES        #
-#################################
-jsonfile = "TreeFeatures" + groupnb + ".json"
-json = open(jsonfile, "w")
-json.write("[\n")
-
-
-def writejsonNode(node):
+def writejsonNode(node, json):
     sci_name = node.sci_name
     sci_name = sci_name.replace('"', '\\"')
     common_name = node.common_name_long
@@ -505,49 +283,264 @@ def writejsonNode(node):
     json.write("  },\n")
 
 
-print("Tree traversal 2... ")
-##LAST LOOP TO write coords of polygs and JSON file
-for n in t.traverse():
-    # save all trees to disk
-    #    out="trees/" + str(n.taxid) + ".tre";
-    #    n.write(outfile=out, features=["taxid","sci_name","common_name","rank"]);
-    ##we finish writing in the database here.
-    if not n.is_root():
+def traverse_tree(
+    groupnb: Literal["1", "2", "3"],
+    starti: int,
+    lang: Literal["EN", "FR"] = "EN",
+    updatedb: bool = True,
+    simplify: bool = False,
+) -> int:
+    """
+    Open taxonomic tree and recode it into PostGRES/PostGIS database for visualisation in Lifemap.
+
+    Parameters
+    ----------
+    groupnb : {'1', '2', '3'}
+        Group to look at. Can be 1,2 or 3 for Archaea, Eukaryotes and Bacteria respectively
+    starti : int
+        index of the first node met in the tree
+    lang : {'EN', 'FR'}, optional
+        Language chosen. FR for french, EN (default) for english, by default "EN"
+    updatedb : bool, optional
+        Should the NCBI taxonomy db be updated ?, by default True
+    simplify : bool, optional
+        Should the tree be simplified by removing environmental and unindentified species?, by default False
+
+    Returns
+    -------
+    int
+        ndid
+    """
+
+    if updatedb:
+        logger.info("Updating database...")
+        updateDB()
+        logger.info("Done")
+    T = getTheTrees()
+
+    ##let's try to write the tree entirely here, in a file
+
+    logger.info("Downloading tree...")
+    if groupnb == "1":
+        # with open('ARCHAEA.pkl', 'rb') as input:
+        # t = pickle.load(input)
+        t = T["2157"].detach()
+        # SIMPLIFY THE TREE IF REQUESTED
+        if simplify:
+            t = simplify_tree(t)
+        # t = Tree("ARCHAEA")
+        logger.info("Archaeal tree loaded...")
+        ##and we save it
+        t.write(
+            outfile=BUILD_DIRECTORY / "ARCHAEA",
+            features=["name", "taxid"],
+            format_root_node=True,
+        )
+        t.x = 6.0
+        t.y = 9.660254 - 10.0
+        t.alpha = 30.0
+        t.ray = 10.0
+        starti = starti
+    if groupnb == "2":
+        # with open('EUKARYOTES.pkl', 'rb') as input:
+        # 	t = pickle.load(input)
+        t = T["2759"].detach()
+        # SIMPLIFY THE TREE IF REQUESTED
+        if simplify:
+            t = simplify_tree(t)
+        logger.info("Eukaryotic tree loaded")
+        t.write(
+            outfile=BUILD_DIRECTORY / "EUKARYOTES",
+            features=["name", "taxid"],
+            format_root_node=True,
+        )
+        t.x = -6.0
+        t.y = 9.660254 - 10.0
+        t.alpha = 150.0
+        t.ray = 10.0
+        starti = starti
+    if groupnb == "3":
+        # with open('BACTERIA.pkl', 'rb') as input:
+        # 	t = pickle.load(input)
+        t = T["2"].detach()
+        # SIMPLIFY THE TREE IF REQUESTED
+        if simplify:
+            t = simplify_tree(t)
+        logger.info("Bacterial tree loaded")
+        t.write(
+            outfile=BUILD_DIRECTORY / "BACTERIA",
+            features=["name", "taxid"],
+            format_root_node=True,
+        )
+        t.x = 0.0
+        t.y = -11.0
+        t.alpha = 270.0
+        t.ray = 10.0
+        starti = starti
+
+    t.zoomview = np.ceil(np.log2(30 / t.ray))
+
+    # specis and node ids
+    nbsp = len(t)
+    spid = starti
+    ndid = starti + nbsp
+    maxZoomView = 0
+
+    ##CONNECT TO POSTGRESQL/POSTGIS DATABASE
+    try:
+        conn = psycopg.connect(
+            PSYCOPG_CONNECT_URL
+        )  # password will be directly retrieved from ~/.pgpassconn
+    except Exception as e:
+        raise RuntimeError(f"Unable to connect to the database: {e}")
+
+    cur = conn.cursor()
+    ##INITIALIZE DATABASE
+    if groupnb == "1":
+        ##we delete current tables
+        logger.info("REMOVING OLD TABLES")
+        cur.execute("DROP TABLE IF EXISTS points;")
+        cur.execute("DROP TABLE IF EXISTS lines;")
+        cur.execute("DROP TABLE IF EXISTS polygons;")
+        conn.commit()
+        ##we create the database structure here
+        cur.execute(
+            "CREATE TABLE points(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POINT,900913));"
+        )
+        cur.execute(
+            "CREATE TABLE lines(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankname boolean,sci_name text,common_name text,full_name text,rank text,name text, nbdesc integer,taxid text,way geometry(LINESTRING,900913));"
+        )
+        cur.execute(
+            "CREATE TABLE polygons(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POLYGON,900913));"
+        )
+        conn.commit()
+        logger.info("\nTABLES HAVE BEEN CREATED. Done.\n")
+        ##we include the root node
+        cur.execute(
+            "INSERT INTO points (id, sci_name, common_name,rank,nbdesc,tip, zoomview,taxid,way) VALUES(1000000000, 'Root','Root','Root',1000000, FALSE, 1,1,ST_Transform(ST_GeomFromText('POINT(0 -4.226497)', 4326), 900913));"
+        )
+        conn.commit()
+
+    logger.info("Tree traversal...")
+    for n in t.traverse():
+        special = 0
+        n.dist = 1.0
+        tot = 0.0
+        if n.is_leaf():
+            spid = spid + 1
+            n.id = spid
+        else:
+            ndid = ndid + 1
+            n.id = ndid
+        child = n.children
+        ##NEW  -->|
+        if (len(child) == 1) & (len(n) > 1):
+            special = 1
+        if (len(child) == 1) & (len(n) == 1):
+            special = 2
+        ## |<-- NEW
+        for i in child:
+            tot = tot + np.sqrt(len(i))
+        nbdesc = len(n)
+        ##remove special chars in names
+        ####IF --LANG IS SET TO FR, WE CHGANGE HERE THE RANK AND COMMON NAMES
+        if lang == "FR":
+            n.common_name = n.common_name_FR
+            n.rank = n.rank_FR
+        #####OK
+        n.common_name_long = ", ".join(n.common_name)
+        n.common_name = n.common_name[0] if len(n.common_name) > 0 else ""
+        ##we create a 'long' common name. the common name going to db is only the first of the list
+        n.common_name = n.common_name.replace("'", "''")
+        n.rank = n.rank.replace("'", "''")
+        n.sci_name = n.sci_name.replace("'", "''")
+        # add parenthesis to the common name
+        if n.common_name != "":
+            n.common_name = "(" + n.common_name + ")"
+        if n.common_name_long != "":
+            n.common_name_long = "(" + n.common_name_long + ")"
+        n.nbdesc = nbdesc
+        angles = []
+        ray = n.ray
+        for i in child:
+            # i.ang = 180*(len(i)/float(nbdesc))/2;
+            i.ang = 180 * (np.sqrt(len(i)) / tot) / 2
+            # using sqrt we decrease difference between large and small groups
+            angles.append(i.ang)
+            if special == 1:
+                i.ray = ray - (ray * 20) / 100
+            else:
+                if special == 2:
+                    i.ray = ray - (ray * 50) / 100
+                else:
+                    i.ray = (ray * np.sin(rad(i.ang)) / np.cos(rad(i.ang))) / (
+                        1 + (np.sin(rad(i.ang)) / np.cos(rad(i.ang)))
+                    )
+            i.dist = ray - i.ray
+        ang = np.repeat(angles, 2)
+        ang = np.cumsum(ang)
+        ang = ang[0::2]
+        ang = [i - (90 - n.alpha) for i in ang]
+        cpt = 0
+        for i in child:
+            i.alpha = ang[cpt]
+            i.x = n.x + i.dist * np.cos(rad(i.alpha))
+            i.y = n.y + i.dist * np.sin(rad(i.alpha))
+            i.zoomview = np.ceil(np.log2(30 / i.ray))
+            if i.zoomview <= 0:
+                i.zoomview = 0
+            if maxZoomView < i.zoomview:
+                maxZoomView = i.zoomview
+            cpt = cpt + 1
+        # we write node info
+        writeosmNode(n, cur)
+
+    logger.info("Tree traversal... DONE (first one)")
+    conn.commit()
+
+    #################################
+    #       WRITE JSON FILES        #
+    #################################
+    jsonfile = BUILD_DIRECTORY / f"TreeFeatures{groupnb}.json"
+    with open(jsonfile, "w") as json:
+        json.write("[\n")
+
+        logger.info("Tree traversal 2... ")
+        ##LAST LOOP TO write coords of polygs and JSON file
+        for n in t.traverse():
+            # save all trees to disk
+            #    out="trees/" + str(n.taxid) + ".tre";
+            #    n.write(outfile=out, features=["taxid","sci_name","common_name","rank"]);
+            ##we finish writing in the database here.
+            if not n.is_root():
+                ndid = ndid + 1
+                writeosmWays(n, ndid, cur, groupnb)
+            if not n.is_leaf():
+                indexes = np.linspace(ndid + 1, ndid + 63, num=63)
+                writeosmpolyg(n, indexes, cur, groupnb)
+                ndid = ndid + 63
+            writejsonNode(n, json)
+        ##after this, node.nbgenomes should be ok.
+        logger.info("Tree traversal 2... DONE ")
+        conn.commit()
+
+        ##we add the way from LUCA to the root of the subtree
         ndid = ndid + 1
-        writeosmWays(n, ndid)
-    if not n.is_leaf():
-        indexes = np.linspace(ndid + 1, ndid + 63, num=63)
-        writeosmpolyg(n, indexes)
-        ndid = ndid + 63
-    writejsonNode(n)
-##after this, node.nbgenomes should be ok.
-print("Tree traversal 2... DONE ")
-conn.commit()
+        command = (
+            "INSERT INTO lines (id, branch, zoomview, ref, way) VALUES(%d,'TRUE', '4','%s',ST_Transform(ST_GeomFromText('LINESTRING(0 -4.226497, %.20f %.20f)', 4326), 900913));"
+            % (ndid, groupnb, t.x, t.y)
+        )
+        cur.execute(command)
+        conn.commit()
 
-##we add the way from LUCA to the root of the subtree
-ndid = ndid + 1
-command = (
-    "INSERT INTO lines (id, branch, zoomview, ref, way) VALUES(%d,'TRUE', '4','%s',ST_Transform(ST_GeomFromText('LINESTRING(0 -4.226497, %.20f %.20f)', 4326), 900913));"
-    % (ndid, groupnb, t.x, t.y)
-)
-cur.execute(command)
-conn.commit()
+        logger.info(f"DONE - ndid:{ndid} - spid:{spid} - Max zoom view: {maxZoomView}")
 
+    ##remove unwanted last character(,) of json file
+    consoleexex = (
+        "head -n -1 " + str(jsonfile) + " > temp.txt ; mv temp.txt " + str(jsonfile)
+    )
+    os.system(consoleexex)
+    with open(jsonfile, "a") as json:
+        json.write("\t}\n]\n")
 
-print("DONE!")
-print(ndid)
-print(spid)
-out = open("tempndid", "w")
-out.write(
-    "%d" % ndid
-)  ##we store the max id so that we start from there for next group.
-print(("Max zoom view : %d" % (maxZoomView)))
-
-
-##remove unwanted last character(,) of json file
-json.close()
-consoleexex = "head -n -1 " + jsonfile + " > temp.txt ; mv temp.txt " + jsonfile
-os.system(consoleexex)
-json = open(jsonfile, "a")
-json.write("\t}\n]\n")
-json.close()
+    return ndid

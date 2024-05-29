@@ -1,5 +1,6 @@
-#!/usr/bin/python
 import math
+
+from config import BUILD_DIRECTORY
 
 
 def deg2num(lat_deg, lon_deg, zoom):
@@ -14,16 +15,14 @@ def deg2num(lat_deg, lon_deg, zoom):
     return [xtile, ytile]
 
 
-zoom = False
-lat = False
-lon = False
-
-coo = open("XYZcoordinates", "w")
 ##output
 
 
-def getXYZ(fi):
-    with open(fi) as f:
+def getXYZ(fi, coo):
+    zoom = False
+    lat = False
+    lon = False
+    with open(BUILD_DIRECTORY / fi) as f:
         for line in f:
             tmp = line.split(":")
             if len(tmp) > 1:
@@ -52,8 +51,8 @@ def getXYZ(fi):
                     lon = False
 
 
-getXYZ("TreeFeatures1.json")
-getXYZ("TreeFeatures2.json")
-getXYZ("TreeFeatures3.json")
-
-coo.close()
+def get_all_coords():
+    with open(BUILD_DIRECTORY / "XYZcoordinates", "w") as coo:
+        getXYZ("TreeFeatures1.json", coo)
+        getXYZ("TreeFeatures2.json", coo)
+        getXYZ("TreeFeatures3.json", coo)

@@ -1,113 +1,180 @@
-#!/usr/bin/python
-
+import logging
 import os
-from argparse import ArgumentParser  ##for options handling
-
-parser = ArgumentParser(
-    description="Perform all Lifemap tree analysis cleaning previous data if any."
+import sys
+from argparse import ArgumentParser
+from datetime import datetime
+from config import (
+    BUILD_DIRECTORY,
+    GENOMES_DIRECTORY,
+    DATE_UPDATE_DIRECTORY,
+    TAXO_DIRECTORY,
 )
-parser.add_argument(
-    "--lang",
-    nargs="?",
-    const="EN",
-    default="EN",
-    help="Language chosen. FR for french, EN (default) for english",
-    choices=["EN", "FR"],
-)
-parser.add_argument(
-    "--simplify",
-    nargs="?",
-    const="True",
-    default="False",
-    help="Should the tree be simplified by removing environmental and unindentified species?",
-    choices=["True", "False"],
-)
-args = parser.parse_args()
+from pathlib import Path
+from typing import Literal
+
+import AdditionalInfo
+import Traverse_To_Pgsql_2
+import CombineJsons
+import PrepareRdata
+import CreateIndex
+import GetAllTilesCoord
+
+# Init logging
+log_path = BUILD_DIRECTORY / "builder.log"
+logger = logging.getLogger("LifemapBuilder")
+fh = logging.FileHandler(log_path, mode="w")
+ch = logging.StreamHandler(stream=sys.stdout)
+# formatter = logging.Formatter("%(asctime)s   %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+# ch.setFormatter(formatter)
+# fh.setFormatter(formatter)
+logger.addHandler(ch)
+logger.addHandler(fh)
+logger.setLevel(logging.DEBUG)
 
 
-##kill render_list (in case it is running)
-print("killing render_list")
-os.system("sudo killall render_list")
-print("ok")
-##
-os.system("mkdir genomes")  ##if not exists
-## 1. get the tree and update database
-print("\nCREATING DATABASE")
-print("  Doing Archaeal tree...")
-os.system(
-    "python Traverse_To_Pgsql_2.py 1 1 --simplify %s --lang %s"
-    % (args.simplify, args.lang)
-)
-print("  ...Done")
-with open("tempndid", "r") as f:
-    ndid = f.readline()
-print("  Doing Eukaryotic tree... start at id: %s" % ndid)
-os.system(
-    "python Traverse_To_Pgsql_2.py 2 %s --updatedb False --simplify %s --lang %s"
-    % (ndid, args.simplify, args.lang)
-)
-print("  ...Done")
-with open("tempndid", "r") as f:
-    ndid = f.readline()
-print("  Doing Bact tree... start at id:%s " % ndid)
-os.system(
-    "python Traverse_To_Pgsql_2.py 3 %s --updatedb False --simplify %s --lang %s"
-    % (ndid, args.simplify, args.lang)
-)
-print("  ...Done")
+def lifemap_build(
+    lang: Literal["EN", "FR"],
+    simplify: bool,
+    skip_traversal: bool = False,
+    skip_add_info: bool = False,
+    skip_merge_jsons: bool = False,
+) -> None:
 
-## 2. Get additional info from NCBI
-print("  Getting addditional Archaeal info...")
-os.system("python Additional.info.py 1")
-print("  Getting addditional Euka info...")
-os.system("python Additional.info.py 2")
-print("  Getting addditional Bacter info...")
-os.system("python Additional.info.py 3")
-print("  ...Done")
+    logger.info("-- Creating genomes directory if needed")
+    Path(GENOMES_DIRECTORY).mkdir(exist_ok=True)
+    logger.info("-- Done")
 
-##2.1. Get FULL info from NCBI (new sept 2019)
-# os.system('python StoreWholeNcbiInSolr.py')
-# print '  ...Done'
+    if skip_traversal:
+        logger.info("--- Skipping tree traversal as requested ---")
+    else:
+        ## 1. get the tree and update database
+        logger.info("-- CREATING DATABASE")
+        logger.info("---- Doing Archaeal tree...")
+        ndid = Traverse_To_Pgsql_2.traverse_tree(
+            groupnb="1", starti=1, simplify=simplify, lang=lang, updatedb=True
+        )
+        logger.info("---- Done")
+        logger.info("---- Doing Eukaryotic tree... start at id: %s" % ndid)
+        ndid = Traverse_To_Pgsql_2.traverse_tree(
+            groupnb="2", starti=ndid, simplify=simplify, lang=lang, updatedb=False
+        )
+        logger.info("---- Done")
+        logger.info("---- Doing Bact tree... start at id:%s " % ndid)
+        ndid = Traverse_To_Pgsql_2.traverse_tree(
+            groupnb="3", starti=ndid, simplify=simplify, lang=lang, updatedb=False
+        )
+        logger.info("---- Done")
 
-## 2.2. Merge Additionaljson and TreeFeatures json
-print("  Merging jsons...")
-os.system("python3 CombineJsons.py")
-print("  ...Done ")
+    ## 2. Get additional info from NCBI
+    if skip_add_info:
+        logger.info("--- Skipping additional info as requested ---")
+    else:
+        logger.info("-- Downloading genomes if needed...")
+        AdditionalInfo.download_genomes()
+        logger.info("-- Getting addditional Archaeal info...")
+        AdditionalInfo.add_info(groupnb="1")
+        logger.info("-- Getting addditional Euka info...")
+        AdditionalInfo.add_info(groupnb="2")
+        logger.info("-- Getting addditional Bacter info...")
+        AdditionalInfo.add_info(groupnb="3")
+        logger.info("-- Done")
 
-## 2.3.1. Write whole data to Rdada file for use in R package LifemapR (among others)
+    ##2.1. Get FULL info from NCBI (new sept 2019)
+    # os.system('python StoreWholeNcbiInSolr.py')
+    # logger.info '  ...Done'
 
-print("  Converting json to Rdata for light data sharing...")
-os.system("python3 PrepareRdata.py")
-print("  ...Done ")
+    ## 2.2. Merge Additionaljson and TreeFeatures json
+    if skip_merge_jsons:
+        logger.info("--- Skipping JSONs merging as requested ---")
+    else:
+        logger.info("---- Merging jsons...")
+        CombineJsons.merge_all()
+        logger.info("---- Done ")
+
+    ## 2.3.1. Write whole data to Rdada file for use in R package LifemapR (among others)
+
+    logger.info("-- Converting json to Rdata for light data sharing...")
+    PrepareRdata.create_rdata()
+    logger.info("-- Done ")
+
+    ## 4. Create postgis index
+    logger.info("-- Creating index... ")
+    CreateIndex.create_index()
+    logger.info("-- Done")
+
+    ##7. Get New coordinates for generating tiles
+    logger.info("-- Get new tiles coordinates")
+    GetAllTilesCoord.get_all_coords()
+    logger.info("-- Done")
+
+    # 5. get and copy date of update to /var/www/html
+    logger.info("-- Update date-update.js")
+    date_update = (TAXO_DIRECTORY / "taxdump.tar.gz").stat().st_mtime
+    date_update = datetime.fromtimestamp(date_update)
+    date_update = date_update.strftime("%a, %d %b %Y")
+    date_update_file = DATE_UPDATE_DIRECTORY / "date-update.js"
+    with open(date_update_file, "w") as f:
+        f.write(f"var DateUpdate='{date_update}';")
+    logger.info("-- Done")
+
+    ## 3. Update Solr informations
+    logger.info("-- Updating Solr... ")
+    os.system("python updateSolr.py")
+    logger.info("-- Done ")
+
+    ##kill render_list (in case it is running)
+    logger.info("-- Killing render_list")
+    os.system("killall render_list")
+    logger.info("-- Done")
+
+    ## 6. Remove ALL old tiles
+    logger.info("-- Deleting old tiles... ")
+    os.system("sudo rm -r /var/lib/mod_tile/*")
+
+    ##8. restart services
+    os.system("sudo service apache2 restart")
+    os.system("sudo service renderd restart")
+    os.system("sudo service renderdlist start")
+
+    ##9. Compute tiles for the 5 first zoom levels ON 7 THREADS
+    logger.info("-- Prerender tiles")
+    os.system("sudo ./preRenderTiles.sh")
 
 
-## 3. Update Solr informations
-print("  Updating Solr... ")
-os.system("python updateSolr.py")
-print("  ...Done ")
+if __name__ == "__main__":
 
-## 4. Create postgis index
-print("  Creating index... ")
-os.system("python CreateIndex.py")
-print("  Done... ")
+    parser = ArgumentParser(
+        description="Perform all Lifemap tree analysis cleaning previous data if any."
+    )
+    parser.add_argument(
+        "--lang",
+        action="store",
+        default="EN",
+        help="Language chosen. FR for french, EN (default) for english",
+        choices=["EN", "FR"],
+    )
+    parser.add_argument(
+        "--simplify",
+        action="store_true",
+        help="Should the tree be simplified by removing environmental and unindentified species?",
+    )
+    parser.add_argument(
+        "--skip-traversal", action="store_true", help="Skip tree building"
+    )
+    parser.add_argument(
+        "--skip-add-info", action="store_true", help="Skip additional info"
+    )
+    parser.add_argument(
+        "--skip-merge-jsons", action="store_true", help="Skip JSONs merging"
+    )
 
-# 5. get and copy date of update to /var/www/html
-os.system("sudo ./getDateUpdate.sh")
+    args = parser.parse_args()
 
-## 6. Remove ALL old tiles
-print("  Deleting old tiles... ")
-os.system("sudo rm -r /var/lib/mod_tile/*")
-
-##7. Get New coordinates for generating tiles
-os.system("python GetAllTilesCoord.py")
-
-##8. restart services
-os.system("sudo service apache2 restart")
-os.system("sudo service renderd restart")
-os.system("sudo service renderdlist start")
-
-##9. Compute tiles for the 5 first zoom levels ON 7 THREADS
-os.system("sudo ./preRenderTiles.sh")
-
-
-##/home/lm/src/Lifemap/PIPELINE/Main.py >> /var/log/lifemap.log
+    # Build or update tree
+    lifemap_build(
+        lang=args.lang,
+        simplify=args.simplify,
+        skip_traversal=args.skip_traversal,
+        skip_add_info=args.skip_add_info,
+        skip_merge_jsons=args.skip_merge_jsons,
+    )
