@@ -44,10 +44,10 @@ def lifemap_build(
     Path(GENOMES_DIRECTORY).mkdir(exist_ok=True)
     logger.info("-- Done")
 
+    ## get the tree and update database
     if skip_traversal:
         logger.info("--- Skipping tree traversal as requested ---")
     else:
-        ## 1. get the tree and update database
         logger.info("-- CREATING DATABASE")
         logger.info("---- Doing Archaeal tree...")
         ndid = Traverse_To_Pgsql_2.traverse_tree(
@@ -65,7 +65,7 @@ def lifemap_build(
         )
         logger.info("---- Done")
 
-    ## 2. Get additional info from NCBI
+    ## Get additional info from NCBI
     if skip_add_info:
         logger.info("--- Skipping additional info as requested ---")
     else:
@@ -83,7 +83,7 @@ def lifemap_build(
     # os.system('python StoreWholeNcbiInSolr.py')
     # logger.info '  ...Done'
 
-    ## 2.2. Merge Additionaljson and TreeFeatures json
+    ## Merge Additionaljson and TreeFeatures json
     if skip_merge_jsons:
         logger.info("--- Skipping JSONs merging as requested ---")
     else:
@@ -91,23 +91,23 @@ def lifemap_build(
         CombineJsons.merge_all()
         logger.info("---- Done ")
 
-    ## 2.3.1. Write whole data to Rdada file for use in R package LifemapR (among others)
+    ## Write whole data to Rdada file for use in R package LifemapR (among others)
 
     logger.info("-- Converting json to Rdata for light data sharing...")
     PrepareRdata.create_rdata()
     logger.info("-- Done ")
 
-    ## 4. Create postgis index
+    ## Create postgis index
     logger.info("-- Creating index... ")
     CreateIndex.create_index()
     logger.info("-- Done")
 
-    ##7. Get New coordinates for generating tiles
+    ## Get New coordinates for generating tiles
     logger.info("-- Get new tiles coordinates")
     GetAllTilesCoord.get_all_coords()
     logger.info("-- Done")
 
-    # 5. get and copy date of update to /var/www/html
+    #  Get and copy date of update to /var/www/html
     logger.info("-- Update date-update.js")
     date_update = (TAXO_DIRECTORY / "taxdump.tar.gz").stat().st_mtime
     date_update = datetime.fromtimestamp(date_update)
@@ -116,11 +116,6 @@ def lifemap_build(
     with open(date_update_file, "w") as f:
         f.write(f"var DateUpdate='{date_update}';")
     logger.info("-- Done")
-
-    ## 3. Update Solr informations
-    logger.info("-- Updating Solr... ")
-    os.system("python updateSolr.py")
-    logger.info("-- Done ")
 
     ##kill render_list (in case it is running)
     logger.info("-- Killing render_list")
