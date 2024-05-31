@@ -38,6 +38,8 @@ def lifemap_build(
     skip_traversal: bool = False,
     skip_add_info: bool = False,
     skip_merge_jsons: bool = False,
+    skip_rdata: bool = False,
+    skip_index: bool = False,
 ) -> None:
 
     logger.info("-- Creating genomes directory if needed")
@@ -71,11 +73,11 @@ def lifemap_build(
     else:
         logger.info("-- Downloading genomes if needed...")
         AdditionalInfo.download_genomes()
-        logger.info("-- Getting addditional Archaeal info...")
+        logger.info("-- Getting additional Archaeal info...")
         AdditionalInfo.add_info(groupnb="1")
-        logger.info("-- Getting addditional Euka info...")
+        logger.info("-- Getting additional Euka info...")
         AdditionalInfo.add_info(groupnb="2")
-        logger.info("-- Getting addditional Bacter info...")
+        logger.info("-- Getting additional Bacter info...")
         AdditionalInfo.add_info(groupnb="3")
         logger.info("-- Done")
 
@@ -92,15 +94,20 @@ def lifemap_build(
         logger.info("---- Done ")
 
     ## Write whole data to Rdada file for use in R package LifemapR (among others)
-
-    logger.info("-- Converting json to Rdata for light data sharing...")
-    PrepareRdata.create_rdata()
-    logger.info("-- Done ")
+    if skip_rdata:
+        logger.info("--- Skipping Rdata export as requested ---")
+    else:
+        logger.info("-- Converting json to Rdata for light data sharing...")
+        PrepareRdata.create_rdata()
+        logger.info("-- Done ")
 
     ## Create postgis index
-    logger.info("-- Creating index... ")
-    CreateIndex.create_index()
-    logger.info("-- Done")
+    if skip_index:
+        logger.info("--- Skipping index creation as requested ---")
+    else:
+        logger.info("-- Creating index... ")
+        CreateIndex.create_index()
+        logger.info("-- Done")
 
     ## Get New coordinates for generating tiles
     logger.info("-- Get new tiles coordinates")
@@ -112,28 +119,12 @@ def lifemap_build(
     date_update = (TAXO_DIRECTORY / "taxdump.tar.gz").stat().st_mtime
     date_update = datetime.fromtimestamp(date_update)
     date_update = date_update.strftime("%a, %d %b %Y")
+    # Create the directory if it doesn't exist
+    Path(DATE_UPDATE_DIRECTORY).mkdir(exist_ok=True)
     date_update_file = DATE_UPDATE_DIRECTORY / "date-update.js"
     with open(date_update_file, "w") as f:
         f.write(f"var DateUpdate='{date_update}';")
     logger.info("-- Done")
-
-    ##kill render_list (in case it is running)
-    logger.info("-- Killing render_list")
-    os.system("killall render_list")
-    logger.info("-- Done")
-
-    ## 6. Remove ALL old tiles
-    logger.info("-- Deleting old tiles... ")
-    os.system("sudo rm -r /var/lib/mod_tile/*")
-
-    ##8. restart services
-    os.system("sudo service apache2 restart")
-    os.system("sudo service renderd restart")
-    os.system("sudo service renderdlist start")
-
-    ##9. Compute tiles for the 5 first zoom levels ON 7 THREADS
-    logger.info("-- Prerender tiles")
-    os.system("sudo ./preRenderTiles.sh")
 
 
 if __name__ == "__main__":
@@ -162,6 +153,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--skip-merge-jsons", action="store_true", help="Skip JSONs merging"
     )
+    parser.add_argument("--skip-rdata", action="store_true", help="Skip Rdata export")
+    parser.add_argument("--skip-index", action="store_true", help="Skip index creation")
 
     args = parser.parse_args()
 
@@ -172,4 +165,6 @@ if __name__ == "__main__":
         skip_traversal=args.skip_traversal,
         skip_add_info=args.skip_add_info,
         skip_merge_jsons=args.skip_merge_jsons,
+        skip_rdata=args.skip_rdata,
+        skip_index=args.skip_index,
     )
