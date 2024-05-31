@@ -7,7 +7,8 @@ SOLR_CONTAINER=lifemap-solr
 
 # Update tree
 echo "- BUILD TREE"
-#rye run python tree/Main.py --skip-traversal --skip-add-info --skip-merge-jsons
+python3 tree/Main.py
+#python3 tree/Main.py --skip-traversal --skip-add-info --skip-merge-jsons
 
 # Update Solr
 echo "- UPDATING SOLR"
