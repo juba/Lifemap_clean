@@ -1,11 +1,9 @@
 #!/bin/sh
 
-set -e
-
-BUILD_DIRECTORY=build
+BUILD_DIRECTORY=~/build_results
 SOLR_CONTAINER=lifemap-solr
 MOD_TILE_CONTAINER=lifemap-mod_tile
-PRERENDER_THREADS=3
+PRERENDER_THREADS=7
 
 # Update tree
 echo "- BUILD TREE"
@@ -39,8 +37,8 @@ echo "- REMOVE OLD TILES"
 docker exec -t $MOD_TILE_CONTAINER rm -r /var/lib/mod_tile/*
 
 # Restart services
-echo "- RESTART SERVICES"
-docker restart $MOD_TILE_CONTAINER
+#echo "- RESTART SERVICES"
+#docker restart $MOD_TILE_CONTAINER
 
 # Compute tiles for the 5 first zoom levels on 7 threads
 echo "- PRERENDER TILES"
