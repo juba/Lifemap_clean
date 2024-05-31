@@ -1,7 +1,7 @@
 from pathlib import Path
 
 # TODO : update
-BUILD_DIRECTORY = Path("build")
+BUILD_DIRECTORY = Path.home() / ("build_results")
 TAXO_DIRECTORY = BUILD_DIRECTORY / "taxo"
 GENOMES_DIRECTORY = BUILD_DIRECTORY / "genomes"
 
