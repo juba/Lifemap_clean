@@ -14,8 +14,8 @@ python3 tree/Main.py
 # Copy lmdata and date-update files
 echo "- COPYING lmdata AND date-update FILES TO WEB ROOT"
 mkdir $WWW_DIRECTORY/data
-cp $BUILD_DIRECTORY/data/* $WWW_DIRECTORY/data
-cp $BUILD_DIRECTORY/html/data-update.js $WWW_DIRECTORY/
+cp $BUILD_DIRECTORY/lmdata/* $WWW_DIRECTORY/data
+cp $BUILD_DIRECTORY/date-update.json $WWW_DIRECTORY/
 
 # Update Solr
 echo "- UPDATING SOLR"
