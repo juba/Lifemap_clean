@@ -1,23 +1,22 @@
+import json
 import logging
-import os
 import sys
 from argparse import ArgumentParser
 from datetime import datetime
-from config import (
-    BUILD_DIRECTORY,
-    GENOMES_DIRECTORY,
-    DATE_UPDATE_DIRECTORY,
-    TAXO_DIRECTORY,
-)
 from pathlib import Path
 from typing import Literal
 
 import AdditionalInfo
-import Traverse_To_Pgsql_2
 import CombineJsons
-import PrepareRdata
 import CreateIndex
 import GetAllTilesCoord
+import PrepareRdata
+import Traverse_To_Pgsql_2
+from config import (
+    BUILD_DIRECTORY,
+    GENOMES_DIRECTORY,
+    TAXO_DIRECTORY,
+)
 
 # Init logging
 log_path = BUILD_DIRECTORY / "builder.log"
@@ -115,15 +114,15 @@ def lifemap_build(
     logger.info("-- Done")
 
     #  Get and copy date of update to /var/www/html
-    logger.info("-- Update date-update.js")
+    logger.info("-- Update date-update.json")
     date_update = (TAXO_DIRECTORY / "taxdump.tar.gz").stat().st_mtime
     date_update = datetime.fromtimestamp(date_update)
-    date_update = date_update.strftime("%a, %d %b %Y")
+    date_update = {"update": date_update.strftime("%Y-%m-%d")}
     # Create the directory if it doesn't exist
-    Path(DATE_UPDATE_DIRECTORY).mkdir(exist_ok=True)
-    date_update_file = DATE_UPDATE_DIRECTORY / "date-update.js"
+    Path(BUILD_DIRECTORY).mkdir(exist_ok=True)
+    date_update_file = BUILD_DIRECTORY / "date-update.json"
     with open(date_update_file, "w") as f:
-        f.write(f"var DateUpdate='{date_update}';")
+        json.dump(date_update, f)
     logger.info("-- Done")
 
 

@@ -7,8 +7,6 @@ GENOMES_DIRECTORY = BUILD_DIRECTORY / "genomes"
 
 # LMDATA_DIRECTORY = "/var/www/html/data"
 LMDATA_DIRECTORY = BUILD_DIRECTORY / "lmdata"
-# DATE_UPDATE_DIRECTORY = "/var/www/html/"
-DATE_UPDATE_DIRECTORY = BUILD_DIRECTORY / "html"
 
 DB_HOST = "localhost"
 DB_NAME = "tree"
