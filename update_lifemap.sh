@@ -4,11 +4,18 @@ BUILD_DIRECTORY=~/build_results
 SOLR_CONTAINER=lifemap-solr
 MOD_TILE_CONTAINER=lifemap-mod_tile
 PRERENDER_THREADS=7
+WWW_DIRECTORY=/var/www/lifemap_back
 
 # Update tree
 echo "- BUILD TREE"
-python3 tree/Main.py
+#python3 tree/Main.py
 #python3 tree/Main.py --skip-traversal --skip-add-info --skip-merge-jsons --skip-rdata --skip-index
+
+# Copy lmdata and date-update files
+echo "- COPYING lmdata AND date-update FILES TO WEB ROOT"
+mkdir $WWW_DIRECTORY/data
+cp $BUILD_DIRECTORY/data/* $WWW_DIRECTORY/data
+cp $BUILD_DIRECTORY/html/data-update.js $WWW_DIRECTORY/
 
 # Update Solr
 echo "- UPDATING SOLR"
