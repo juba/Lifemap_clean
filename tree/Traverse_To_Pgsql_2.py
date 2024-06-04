@@ -127,7 +127,7 @@ def HalfCircPlusEllips(x, y, r, alpha, start, end, nsteps):
 def writeosmNode(node, cur):
     ##we write INFO FOR EACH NODE. Clades will be delt with later on. We put less info than for the json file
     command = (
-        "INSERT INTO points (id, taxid, sci_name, common_name,rank,nbdesc,zoomview, tip,way) VALUES(%d,%s,'%s','%s','%s',%d,%d,'%s',ST_Transform(ST_GeomFromText('POINT(%.20f %.20f)', 4326), 900913));"
+        "INSERT INTO points (id, taxid, sci_name, common_name,rank,nbdesc,zoomview, tip,way) VALUES(%d,%s,'%s','%s','%s',%d,%d,'%s',ST_Transform(ST_GeomFromText('POINT(%.20f %.20f)', 4326), 3857));"
         % (
             node.id,
             node.taxid,
@@ -163,7 +163,7 @@ def writeosmWays(node, id, cur, groupnb):
     midlatlon = midpoint(node.up.x, node.up.y, node.x, node.y)
 
     command = (
-        "INSERT INTO lines (id, branch, zoomview, ref, name, way) VALUES(%d,'TRUE',%d,'%s',E'%s',ST_Transform(ST_GeomFromText('LINESTRING(%.20f %.20f, %.20f %.20f,%.20f %.20f)', 4326), 900913));"
+        "INSERT INTO lines (id, branch, zoomview, ref, name, way) VALUES(%d,'TRUE',%d,'%s',E'%s',ST_Transform(ST_GeomFromText('LINESTRING(%.20f %.20f, %.20f %.20f,%.20f %.20f)', 4326), 3857));"
         % (
             id,
             node.zoomview,
@@ -199,7 +199,7 @@ def writeosmpolyg(node, ids, cur, groupnb):
     # to close the ring...
     cooPolyg += "))"
     command = (
-        "INSERT INTO polygons (id, ref, clade, taxid, sci_name, common_name, rank, nbdesc,zoomview, way) VALUES(%d,'%s','TRUE', %s,'%s','%s','%s',%d,%d, ST_Transform(ST_GeomFromText('%s', 4326), 900913));"
+        "INSERT INTO polygons (id, ref, clade, taxid, sci_name, common_name, rank, nbdesc,zoomview, way) VALUES(%d,'%s','TRUE', %s,'%s','%s','%s',%d,%d, ST_Transform(ST_GeomFromText('%s', 4326), 3857));"
         % (
             ids[60],
             groupnb,
@@ -216,7 +216,7 @@ def writeosmpolyg(node, ids, cur, groupnb):
     ##conn.commit();
     # and add the clade center.
     command = (
-        "INSERT INTO points (id, cladecenter, taxid, sci_name, common_name,rank,nbdesc,zoomview, way) VALUES('%d','TRUE', %s,'%s','%s','%s',%d,%d,ST_Transform(ST_GeomFromText('POINT(%.20f %.20f)', 4326), 900913));"
+        "INSERT INTO points (id, cladecenter, taxid, sci_name, common_name,rank,nbdesc,zoomview, way) VALUES('%d','TRUE', %s,'%s','%s','%s',%d,%d,ST_Transform(ST_GeomFromText('POINT(%.20f %.20f)', 4326), 3857));"
         % (
             ids[61],
             node.taxid,
@@ -237,7 +237,7 @@ def writeosmpolyg(node, ids, cur, groupnb):
         cooLine += ",%.20f %.20f" % (polyg[0][i], polyg[1][i])
     cooLine += ")"
     command = (
-        "INSERT INTO lines (id, ref, rankname, sci_name, zoomview, rank, nbdesc, way) VALUES(%d,%s,'TRUE','%s',%d,'%s',%d, ST_Transform(ST_GeomFromText('%s', 4326), 900913));"
+        "INSERT INTO lines (id, ref, rankname, sci_name, zoomview, rank, nbdesc, way) VALUES(%d,%s,'TRUE','%s',%d,'%s',%d, ST_Transform(ST_GeomFromText('%s', 4326), 3857));"
         % (
             ids[62],
             groupnb,
@@ -405,19 +405,19 @@ def traverse_tree(
         conn.commit()
         ##we create the database structure here
         cur.execute(
-            "CREATE TABLE points(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POINT,900913));"
+            "CREATE TABLE points(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POINT,3857));"
         )
         cur.execute(
-            "CREATE TABLE lines(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankname boolean,sci_name text,common_name text,full_name text,rank text,name text, nbdesc integer,taxid text,way geometry(LINESTRING,900913));"
+            "CREATE TABLE lines(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankname boolean,sci_name text,common_name text,full_name text,rank text,name text, nbdesc integer,taxid text,way geometry(LINESTRING,3857));"
         )
         cur.execute(
-            "CREATE TABLE polygons(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POLYGON,900913));"
+            "CREATE TABLE polygons(id bigint,ref smallint,z_order smallint,branch boolean,tip boolean,zoomview integer,clade boolean,cladecenter boolean,rankame boolean,sci_name text,common_name text,full_name text,rank text, name text, nbdesc integer,taxid text,way geometry(POLYGON,3857));"
         )
         conn.commit()
         logger.info("\nTABLES HAVE BEEN CREATED. Done.\n")
         ##we include the root node
         cur.execute(
-            "INSERT INTO points (id, sci_name, common_name,rank,nbdesc,tip, zoomview,taxid,way) VALUES(1000000000, 'Root','Root','Root',1000000, FALSE, 1,1,ST_Transform(ST_GeomFromText('POINT(0 -4.226497)', 4326), 900913));"
+            "INSERT INTO points (id, sci_name, common_name,rank,nbdesc,tip, zoomview,taxid,way) VALUES(1000000000, 'Root','Root','Root',1000000, FALSE, 1,1,ST_Transform(ST_GeomFromText('POINT(0 -4.226497)', 4326), 3857));"
         )
         conn.commit()
 
@@ -527,7 +527,7 @@ def traverse_tree(
         ##we add the way from LUCA to the root of the subtree
         ndid = ndid + 1
         command = (
-            "INSERT INTO lines (id, branch, zoomview, ref, way) VALUES(%d,'TRUE', '4','%s',ST_Transform(ST_GeomFromText('LINESTRING(0 -4.226497, %.20f %.20f)', 4326), 900913));"
+            "INSERT INTO lines (id, branch, zoomview, ref, way) VALUES(%d,'TRUE', '4','%s',ST_Transform(ST_GeomFromText('LINESTRING(0 -4.226497, %.20f %.20f)', 4326), 3857));"
             % (ndid, groupnb, t.x, t.y)
         )
         cur.execute(command)
